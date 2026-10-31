@@ -1,0 +1,20 @@
+{
+  "name": "oauth-book-ch01",
+  "version": "1.0.0",
+  "description": "第1章：最小限の認可コードフロー実装（Keycloak + Hono + fetch）",
+  "main": "src/index.ts",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.7",
+    "dotenv": "^16.4.7",
+    "hono": "^4.6.14"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
