@@ -84,7 +84,7 @@ const randomString = (bytes: number): string => {
 };
 
 const generatePkce = (): { verifier: string; challenge: string } => {
-  const verifier = randomBytes(32).toString("base64url");
+  const verifier = randomString(32);
   const challenge = createHash("sha256").update(verifier).digest("base64url");
 
   return { verifier, challenge };
@@ -125,6 +125,12 @@ const verifyIdToken = async (
   const header = JSON.parse(Buffer.from(headerB64, "base64url").toString("utf8")) as IdTokenHeader;
   const payload = JSON.parse(Buffer.from(payloadB64, "base64url").toString("utf8")) as IdTokenPayload;
 
+  // OpenID Connect Core 1.0 Section 3.1.3.7 — alg の検証
+  if (header.alg !== "RS256") {
+    throw new Error(`unsupported signature algorithm: ${header.alg}`);
+  }
+
+  // 1. JWKS から公開鍵を取得して署名を検証
   const jwk = await fetchJwk(jwksUri, header.kid);
   const publicKey = createPublicKey({ key: jwk as any, format: "jwk" });
 
@@ -137,6 +143,7 @@ const verifyIdToken = async (
     throw new Error("ID token signature verification failed");
   }
 
+  // 2. OpenID Connect Core 1.0 Section 3.1.3.7 — クレームの厳密な検証
   if (payload.iss !== expectedIssuer) {
     throw new Error(`issuer mismatch: expected ${expectedIssuer}, got ${payload.iss}`);
   }
@@ -190,6 +197,8 @@ app.get("/auth/login", (c) => {
   authorizationUrl.searchParams.set("scope", "openid profile email");
   authorizationUrl.searchParams.set("state", state);
   authorizationUrl.searchParams.set("nonce", nonce);
+
+  // RFC 7636 Section 4.3 — code_challenge と計算方式 S256 を付加
   authorizationUrl.searchParams.set("code_challenge", challenge);
   authorizationUrl.searchParams.set("code_challenge_method", "S256");
 
@@ -231,6 +240,7 @@ app.get("/auth/callback", async (c) => {
       redirect_uri: requiredEnv("OIDC_REDIRECT_URI"),
       client_id: requiredEnv("OIDC_CLIENT_ID"),
       client_secret: requiredEnv("OIDC_CLIENT_SECRET"),
+      // RFC 7636 Section 4.5 — code_verifier を送信して照合
       code_verifier: codeVerifier,
     }),
   });
