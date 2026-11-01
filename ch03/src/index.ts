@@ -333,51 +333,28 @@ app.get("/me", async (c) => {
   const picture = typeof userinfo?.picture === "string" ? userinfo.picture : null;
 
   return c.html(`
-    <!DOCTYPE html>
-    <html lang="ja">
-      <head>
-        <meta charset="utf-8" />
-        <title>マイページ</title>
-        <style>
-          body { font-family: sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; color: #333; }
-          .card { border: 1px solid #ddd; border-radius: 8px; padding: 1.5rem; display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; background: #fafafa; }
-          .avatar { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; }
-          details { border: 1px solid #eee; border-radius: 6px; padding: 0.75rem; margin-bottom: 1rem; background: #fff; }
-          summary { font-weight: bold; cursor: pointer; }
-          pre { background: #f4f4f4; padding: 0.75rem; border-radius: 4px; overflow-x: auto; font-size: 0.85rem; }
-        </style>
-      </head>
-      <body>
-        <h1>ログイン完了（保護されたマイページ）</h1>
-        
-        <div class="card">
-          ${picture ? `<img src="${picture}" alt="Avatar" class="avatar" referrerpolicy="no-referrer" />` : ""}
-          <div>
-            <h2 style="margin: 0 0 0.25rem 0;">${name}</h2>
-            <div style="color: #666;">${email}</div>
-            <div style="font-size: 0.85rem; color: #888;">ID: <code>${session.sub}</code></div>
-          </div>
-        </div>
+    <h1>ログイン完了</h1>
+    <p>
+      ${picture ? `<img src="${picture}" width="64" height="64" style="border-radius: 50%; vertical-align: middle;" referrerpolicy="no-referrer" /> ` : ""}
+      <strong>${name}</strong> (${email})
+    </p>
 
-        <details open>
-          <summary>サーバー側セッションのトークン（BFF パターン）</summary>
-          <p style="font-size: 0.85rem; color: #666;">ブラウザには渡さず、サーバー側セッションで安全に保持しているトークンです。</p>
-          <pre>${JSON.stringify(session.tokens, null, 2)}</pre>
-        </details>
+    <details open>
+      <summary>サーバー側セッションのトークン（BFF パターン）</summary>
+      <pre>${JSON.stringify(session.tokens, null, 2)}</pre>
+    </details>
 
-        <details open>
-          <summary>検証済み ID トークン情報</summary>
-          <pre>${JSON.stringify(session.verifiedClaims, null, 2)}</pre>
-        </details>
+    <details open>
+      <summary>検証済み ID トークン情報</summary>
+      <pre>${JSON.stringify(session.verifiedClaims, null, 2)}</pre>
+    </details>
 
-        <details>
-          <summary>UserInfo API の生レスポンス</summary>
-          <pre>${JSON.stringify(userinfo, null, 2)}</pre>
-        </details>
+    <details>
+      <summary>UserInfo API レスポンス</summary>
+      <pre>${JSON.stringify(userinfo, null, 2)}</pre>
+    </details>
 
-        <p><a href="/">トップへ戻る</a></p>
-      </body>
-    </html>
+    <p><a href="/">トップへ戻る</a></p>
   `);
 });
 
