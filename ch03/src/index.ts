@@ -7,6 +7,15 @@ import { getCookie, setCookie } from "hono/cookie";
 type Session = {
   sub: string;
   email?: string;
+  tokens: {
+    accessToken: string;
+    idToken: string;
+  };
+  verifiedClaims: {
+    issuer: string;
+    audience: string;
+    authTime?: number;
+  };
 };
 
 type OpenIdConfiguration = {
@@ -14,6 +23,7 @@ type OpenIdConfiguration = {
   authorization_endpoint: string;
   token_endpoint: string;
   jwks_uri: string;
+  userinfo_endpoint?: string;
 };
 
 type JwkKey = {
@@ -40,6 +50,7 @@ type IdTokenPayload = {
   sub: string;
   exp: number;
   iat: number;
+  auth_time?: number;
   nonce?: string;
   email?: string;
 };
@@ -59,6 +70,17 @@ const requiredEnv = (name: string): string => {
   return value;
 };
 
+const randomString = (bytes: number): string => {
+  return randomBytes(bytes).toString("base64url");
+};
+
+const generatePkce = (): { verifier: string; challenge: string } => {
+  const verifier = randomString(32);
+  const challenge = createHash("sha256").update(verifier).digest("base64url");
+
+  return { verifier, challenge };
+};
+
 const fetchOpenIdConfiguration = async (issuerUrl: string): Promise<OpenIdConfiguration> => {
   const trimmedIssuer = issuerUrl.replace(/\/+$/, "");
   const configUrl = `${trimmedIssuer}/.well-known/openid-configuration`;
@@ -76,18 +98,8 @@ const fetchOpenIdConfiguration = async (issuerUrl: string): Promise<OpenIdConfig
     authorization_endpoint: json.authorization_endpoint,
     token_endpoint: json.token_endpoint,
     jwks_uri: json.jwks_uri,
+    userinfo_endpoint: json.userinfo_endpoint,
   };
-};
-
-const randomString = (bytes: number): string => {
-  return randomBytes(bytes).toString("base64url");
-};
-
-const generatePkce = (): { verifier: string; challenge: string } => {
-  const verifier = randomString(32);
-  const challenge = createHash("sha256").update(verifier).digest("base64url");
-
-  return { verifier, challenge };
 };
 
 const fetchJwk = async (jwksUri: string, kid: string): Promise<JwkKey> => {
@@ -267,6 +279,15 @@ app.get("/auth/callback", async (c) => {
   const session: Session = {
     sub: verifiedPayload.sub,
     email: verifiedPayload.email,
+    tokens: {
+      accessToken: tokens.access_token,
+      idToken: tokens.id_token,
+    },
+    verifiedClaims: {
+      issuer: verifiedPayload.iss,
+      audience: verifiedPayload.aud,
+      authTime: verifiedPayload.auth_time,
+    },
   };
 
   sessions.set(sessionId, session);
@@ -280,7 +301,7 @@ app.get("/auth/callback", async (c) => {
   return c.redirect("/me");
 });
 
-app.get("/me", (c) => {
+app.get("/me", async (c) => {
   const sessionId = getCookie(c, "sid");
 
   if (!sessionId) {
@@ -293,7 +314,71 @@ app.get("/me", (c) => {
     return c.text("not logged in", 401);
   }
 
-  return c.json(session);
+  let userinfo: Record<string, unknown> | null = null;
+
+  if (oidcConfig.userinfo_endpoint) {
+    const userinfoResponse = await fetch(oidcConfig.userinfo_endpoint, {
+      headers: {
+        authorization: `Bearer ${session.tokens.accessToken}`,
+      },
+    });
+
+    if (userinfoResponse.ok) {
+      userinfo = await userinfoResponse.json() as Record<string, unknown>;
+    }
+  }
+
+  const name = String(userinfo?.name ?? "Guest");
+  const email = String(userinfo?.email ?? session.email ?? "No Email");
+  const picture = typeof userinfo?.picture === "string" ? userinfo.picture : null;
+
+  return c.html(`
+    <!DOCTYPE html>
+    <html lang="ja">
+      <head>
+        <meta charset="utf-8" />
+        <title>マイページ</title>
+        <style>
+          body { font-family: sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; color: #333; }
+          .card { border: 1px solid #ddd; border-radius: 8px; padding: 1.5rem; display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; background: #fafafa; }
+          .avatar { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; }
+          details { border: 1px solid #eee; border-radius: 6px; padding: 0.75rem; margin-bottom: 1rem; background: #fff; }
+          summary { font-weight: bold; cursor: pointer; }
+          pre { background: #f4f4f4; padding: 0.75rem; border-radius: 4px; overflow-x: auto; font-size: 0.85rem; }
+        </style>
+      </head>
+      <body>
+        <h1>ログイン完了（保護されたマイページ）</h1>
+        
+        <div class="card">
+          ${picture ? `<img src="${picture}" alt="Avatar" class="avatar" referrerpolicy="no-referrer" />` : ""}
+          <div>
+            <h2 style="margin: 0 0 0.25rem 0;">${name}</h2>
+            <div style="color: #666;">${email}</div>
+            <div style="font-size: 0.85rem; color: #888;">ID: <code>${session.sub}</code></div>
+          </div>
+        </div>
+
+        <details open>
+          <summary>サーバー側セッションのトークン（BFF パターン）</summary>
+          <p style="font-size: 0.85rem; color: #666;">ブラウザには渡さず、サーバー側セッションで安全に保持しているトークンです。</p>
+          <pre>${JSON.stringify(session.tokens, null, 2)}</pre>
+        </details>
+
+        <details open>
+          <summary>検証済み ID トークン情報</summary>
+          <pre>${JSON.stringify(session.verifiedClaims, null, 2)}</pre>
+        </details>
+
+        <details>
+          <summary>UserInfo API の生レスポンス</summary>
+          <pre>${JSON.stringify(userinfo, null, 2)}</pre>
+        </details>
+
+        <p><a href="/">トップへ戻る</a></p>
+      </body>
+    </html>
+  `);
 });
 
 const port = Number(process.env.PORT ?? 3000);
