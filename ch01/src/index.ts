@@ -2,16 +2,9 @@ import "dotenv/config";
 import { randomBytes } from "node:crypto";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
-import { getCookie, setCookie } from "hono/cookie";
-
-type Session = {
-  sub: string;
-  email?: string;
-};
 
 const app = new Hono();
 const states = new Map<string, true>();
-const sessions = new Map<string, Session>();
 
 const requiredEnv = (name: string): string => {
   const value = process.env[name];
@@ -37,26 +30,6 @@ const decodeJwtPayload = (token: string): unknown => {
   const json = Buffer.from(payload, "base64url").toString("utf8");
 
   return JSON.parse(json);
-};
-
-const toSession = (payload: unknown): Session => {
-  if (typeof payload !== "object" || payload === null) {
-    throw new Error("invalid ID token payload");
-  }
-
-  const claims = payload as {
-    sub?: unknown;
-    email?: unknown;
-  };
-
-  if (typeof claims.sub !== "string") {
-    throw new Error("sub is required");
-  }
-
-  return {
-    sub: claims.sub,
-    email: typeof claims.email === "string" ? claims.email : undefined,
-  };
 };
 
 app.get("/", (c) => {
@@ -117,34 +90,15 @@ app.get("/auth/callback", async (c) => {
   };
 
   const idTokenPayload = decodeJwtPayload(tokens.id_token);
-  const sessionId = randomBytes(32).toString("base64url");
-  const session = toSession(idTokenPayload);
 
-  sessions.set(sessionId, session);
-
-  setCookie(c, "sid", sessionId, {
-    httpOnly: true,
-    sameSite: "Lax",
-    path: "/",
+  return c.json({
+    message: "login succeeded",
+    tokens: {
+      access_token: tokens.access_token,
+      id_token: tokens.id_token,
+    },
+    idTokenPayload,
   });
-
-  return c.redirect("/me");
-});
-
-app.get("/me", (c) => {
-  const sessionId = getCookie(c, "sid");
-
-  if (!sessionId) {
-    return c.text("not logged in", 401);
-  }
-
-  const session = sessions.get(sessionId);
-
-  if (!session) {
-    return c.text("not logged in", 401);
-  }
-
-  return c.json(session);
 });
 
 const port = Number(process.env.PORT ?? 3000);
