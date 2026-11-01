@@ -1,6 +1,6 @@
-# TypeScriptでOAuth 2.0 / OpenID Connectを実装して理解する本 ── サンプルコード
+# 実装して理解する OAuth 2.0 / OpenID Connect ── サンプルコード
 
-書籍『**TypeScriptでOAuth 2.0 / OpenID Connectを実装して理解する本 ── ライブラリなしでGoogleログインを作る**』の公式サンプルコードリポジトリです。
+書籍『**実装して理解する OAuth 2.0 / OpenID Connect ── TypeScriptで Keycloak / Google ログインを作る**』の公式サンプルコードリポジトリです。
 
 ---
 
