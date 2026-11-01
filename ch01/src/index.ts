@@ -89,16 +89,31 @@ app.get("/auth/callback", async (c) => {
     id_token: string;
   };
 
+  const userinfoResponse = await fetch(requiredEnv("OIDC_USERINFO_ENDPOINT"), {
+    headers: {
+      authorization: `Bearer ${tokens.access_token}`,
+    },
+  });
+
+  if (!userinfoResponse.ok) {
+    const body = await userinfoResponse.text();
+    return c.text(`userinfo request failed: ${body}`, 500);
+  }
+
+  const userinfo = await userinfoResponse.json();
   const idTokenPayload = decodeJwtPayload(tokens.id_token);
 
-  return c.json({
+  const responseData = {
     message: "login succeeded",
     tokens: {
       access_token: tokens.access_token,
       id_token: tokens.id_token,
     },
+    userinfo,
     idTokenPayload,
-  });
+  };
+
+  return c.html(`<pre>${JSON.stringify(responseData, null, 2)}</pre>`);
 });
 
 const port = Number(process.env.PORT ?? 3000);
